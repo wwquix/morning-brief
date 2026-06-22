@@ -1,4 +1,4 @@
-<img width="1902" height="944" alt="image" src="https://github.com/user-attachments/assets/cf8a7779-df82-4c1b-ac0d-c1f876ff8551" /># Утренняя сводка <img width="1902" height="944" alt="image" src="https://github.com/user-attachments/assets/09d81e12-1bdc-440c-b3ea-65962bb6483e" />
+ /># Утренняя сводка <img width="1902" height="944" alt="image" src="https://github.com/user-attachments/assets/09d81e12-1bdc-440c-b3ea-65962bb6483e" />
 
 
 Локальный Python-проект для создания Markdown-файла с утренней сводкой и отправки уведомлений.
@@ -61,6 +61,7 @@ npm run build
 - праздники;
 - котов картинками;
 - задачи.
+<img width="1895" height="937" alt="image" src="https://github.com/user-attachments/assets/6adc8291-9805-4298-83bb-e76c95b4d728" />
 
 React Bits сейчас не используется.
 
@@ -101,6 +102,7 @@ Start-Process (Get-ChildItem ".\output\*.html" | Sort-Object LastWriteTime -Desc
 Если `send_telegram=true`, но `TELEGRAM_BOT_TOKEN` или `TELEGRAM_CHAT_ID` не заданы, скрипт выведет предупреждение и продолжит работу локально.
 
 ## Telegram
+<img width="1899" height="937" alt="image" src="https://github.com/user-attachments/assets/6487c089-609c-4086-9d21-ef889909fb08" />
 
 ### Создать бота
 
@@ -178,6 +180,7 @@ Start-Process (Get-ChildItem ".\output\*.html" | Sort-Object LastWriteTime -Desc
 ```
 
 ## Перенос на сервер
+<img width="1896" height="938" alt="image" src="https://github.com/user-attachments/assets/0712b333-1a01-4d83-b97f-77654ab3184c" />
 
 На Linux-сервере Windows-уведомления не нужны, поэтому в `config.json` обычно ставят:
 
