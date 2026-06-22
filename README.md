@@ -1,4 +1,5 @@
-# Утренняя сводка
+<img width="1902" height="944" alt="image" src="https://github.com/user-attachments/assets/cf8a7779-df82-4c1b-ac0d-c1f876ff8551" /># Утренняя сводка <img width="1902" height="944" alt="image" src="https://github.com/user-attachments/assets/09d81e12-1bdc-440c-b3ea-65962bb6483e" />
+
 
 Локальный Python-проект для создания Markdown-файла с утренней сводкой и отправки уведомлений.
 
