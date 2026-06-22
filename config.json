@@ -1,0 +1,13 @@
+{
+  "city_name": "Светлогорск",
+  "country_name": "Беларусь",
+  "latitude": 52.6329,
+  "longitude": 29.7389,
+  "timezone": "Europe/Minsk",
+  "country_code": "BY",
+  "language": "ru",
+  "output_dir": "output",
+  "cat_images_count": 2,
+  "send_telegram": true,
+  "send_windows_notification": true
+}

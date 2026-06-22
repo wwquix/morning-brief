@@ -1,0 +1,32 @@
+.strands {
+  position: absolute;
+  inset: -42px -80px -34px 28%;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  opacity: 0.92;
+  pointer-events: none;
+}
+
+.strands--glass {
+  backdrop-filter: blur(10px);
+}
+
+.strands__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 780px) {
+  .strands {
+    inset: 12px -72px 28px 12%;
+    opacity: 0.66;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .strands {
+    display: none;
+  }
+}
