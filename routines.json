@@ -1,0 +1,64 @@
+[
+  {
+    "id": "routine-morning-water",
+    "title": "Выпить стакан воды",
+    "active": true,
+    "days": [
+      "Ежедневно"
+    ],
+    "category": "Здоровье",
+    "duration_minutes": 2,
+    "details": "Без спешки, до кофе или чая."
+  },
+  {
+    "id": "routine-articulation",
+    "title": "Короткая разминка речи",
+    "active": true,
+    "days": [
+      "Ежедневно"
+    ],
+    "category": "Здоровье",
+    "duration_minutes": 5,
+    "details": "Мягкие движения губ и языка, без боли и сильного напряжения."
+  },
+  {
+    "id": "routine-it-focus",
+    "title": "Сфокусированная практика IT",
+    "active": true,
+    "days": [
+      "Пн",
+      "Вт",
+      "Ср",
+      "Чт",
+      "Пт"
+    ],
+    "category": "IT",
+    "duration_minutes": 30,
+    "details": "Одна конкретная тема или задача без переключений."
+  },
+  {
+    "id": "routine-breaks",
+    "title": "Перерывы от компьютера",
+    "active": true,
+    "days": [
+      "Ежедневно"
+    ],
+    "category": "Здоровье",
+    "duration_minutes": 10,
+    "details": "Несколько коротких пауз, взгляд вдаль и лёгкая разминка."
+  },
+  {
+    "id": "routine-reading",
+    "title": "Чтение вслух",
+    "active": true,
+    "days": [
+      "Пн",
+      "Ср",
+      "Пт",
+      "Вс"
+    ],
+    "category": "Учёба",
+    "duration_minutes": 10,
+    "details": "Следить за окончаниями, паузами и естественной громкостью."
+  }
+]
