@@ -1,0 +1,10 @@
+[Unit]
+Description=Morning Brief daily planner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/morning-brief
+EnvironmentFile=/etc/morning-brief.env
+ExecStart=/opt/morning-brief/.venv/bin/python /opt/morning-brief/planner_app.py

@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Stop"
 
 Set-Location -LiteralPath $PSScriptRoot
 
@@ -16,7 +16,7 @@ function Write-Log {
     Add-Content -Path $logPath -Value "$stamp $Message" -Encoding UTF8
 }
 
-Write-Log "Morning brief start"
+Write-Log "Morning brief planner start"
 
 $envPath = Join-Path $PSScriptRoot ".env"
 
@@ -42,9 +42,10 @@ if (Test-Path $envPath) {
 
 Write-Log "Telegram token present: $([bool]$env:TELEGRAM_BOT_TOKEN)"
 Write-Log "Telegram chat id present: $([bool]$env:TELEGRAM_CHAT_ID)"
+Write-Log "Notion token present: $([bool]$env:NOTION_TOKEN)"
 
 $pythonPath = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
-$appPath = Join-Path $PSScriptRoot "app.py"
+$appPath = Join-Path $PSScriptRoot "planner_app.py"
 
 if (!(Test-Path $pythonPath)) {
     Write-Log "ERROR: Python not found at $pythonPath"
@@ -52,16 +53,17 @@ if (!(Test-Path $pythonPath)) {
 }
 
 if (!(Test-Path $appPath)) {
-    Write-Log "ERROR: app.py not found at $appPath"
+    Write-Log "ERROR: planner_app.py not found at $appPath"
     exit 1
 }
 
 & $pythonPath $appPath 2>&1 | ForEach-Object {
     Add-Content -Path $logPath -Value $_ -Encoding UTF8
+    Write-Host $_
 }
 
 $exitCode = $LASTEXITCODE
 
-Write-Log "Morning brief finished with code $exitCode"
+Write-Log "Morning brief planner finished with code $exitCode"
 
 exit $exitCode

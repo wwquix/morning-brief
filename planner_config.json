@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "tasks_source": "both",
+  "routines_source": "both",
+  "exercises_source": "both",
+  "create_notion_day_page": true,
+  "diction_categories": [
+    "warmup",
+    "syllables",
+    "words",
+    "tongue_twister",
+    "reading",
+    "free_speech"
+  ],
+  "diction_items_per_category": 1,
+  "similarity_threshold": 94,
+  "database_path": "data/morning_brief.db",
+  "routines_path": "routines.json",
+  "exercises_path": "diction_exercises.json"
+}

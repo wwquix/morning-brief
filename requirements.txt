@@ -1,3 +1,4 @@
 requests>=2.31.0
 tzdata>=2024.1
+rapidfuzz>=3.9.0
 win11toast>=0.35; platform_system == "Windows"

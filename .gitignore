@@ -8,3 +8,6 @@ output/
 .venv/
 venv/
 frontend/dist/
+data/*.db
+data/*.db-*
+.pytest_cache/
