@@ -1,3 +1,5 @@
+param([switch]$LocalOnly)
+
 $ErrorActionPreference = "Stop"
 
 Set-Location -LiteralPath $PSScriptRoot
@@ -33,7 +35,10 @@ if (!(Test-Path $appPath)) {
     exit 1
 }
 
-& $pythonPath $appPath 2>&1 | ForEach-Object {
+$appArguments = @($appPath)
+if ($LocalOnly) { $appArguments += "--local-only" }
+
+& $pythonPath @appArguments 2>&1 | ForEach-Object {
     Add-Content -Path $logPath -Value $_ -Encoding UTF8
 }
 

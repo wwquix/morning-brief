@@ -1,252 +1,169 @@
- /># Утренняя сводка <img width="1902" height="944" alt="image" src="https://github.com/user-attachments/assets/09d81e12-1bdc-440c-b3ea-65962bb6483e" />
+# Утренняя сводка
 
+Личная сводка погоды, праздников, котов и незавершённых задач. Python создаёт
+`output/YYYY-MM-DD.md` и `output/YYYY-MM-DD.html`; React оформляет HTML.
+По настройкам файл отправляется в Telegram и показывается Windows-уведомление.
 
-Локальный Python-проект для создания Markdown-файла с утренней сводкой и отправки уведомлений.
+Готовый HTML можно перенести и открыть без сети: стили, JavaScript, шрифты
+и успешно загруженные картинки встроены внутрь. Обновление страницы не обновляет
+данные и не отправляет сообщения. Для новой сводки снова запустите Python.
+Задачи редактируются в `tasks.md`; это статический отчёт, не менеджер задач.
 
-Каждый запуск `app.py`:
-
-- создает файл `output\YYYY-MM-DD.md`;
-- создает HTML-версию `output\YYYY-MM-DD.html`;
-- HTML-версия использует Vite + React frontend из папки `frontend` и данные `window.BRIEF_DATA`;
-- HTML-файл самодостаточный: CSS, JS, hero-изображение и локальные картинки котов встраиваются внутрь файла;
-- добавляет дату, праздник, погоду, картинки котов и незавершенные задачи из `tasks.md`;
-- скачивает котов в `output\cats` и вставляет их в HTML как галерею;
-- показывает Windows-уведомление, если `send_windows_notification=true`;
-- отправляет HTML-файл документом в Telegram, если `send_telegram=true`.
-
-Токен Telegram не хранится в коде, `config.json`, README или логах. Он читается из переменной окружения `TELEGRAM_BOT_TOKEN` или из локального файла `.env`.
+![Пример сводки](image.png)
 
 ## Требования
 
-- Python 3.11+
-- Node.js 20+ для сборки React frontend
-- интернет-доступ для API погоды, праздников, котов и Telegram
-- Windows для локального toast-уведомления
+- Python 3.11+.
+- Node.js 22.12+ в ветке 22, Node 24 или 26+ для сборки и тестов интерфейса.
+- Интернет для установки и получения свежих данных. Сбои API отображаются в сводке.
+- Windows 10/11 для toast; генератор также работает на Linux.
 
 ## Первый запуск на Windows
 
 ```powershell
-cd "D:\yura\Сайты и код\проекты\Бот уведомление - Сводка с утра"
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python app.py
-```
-
-Если команда `python` не найдена, используйте `py`:
-
-```powershell
+git clone https://github.com/wwquix/morning-brief.git
+cd morning-brief
 py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python app.py
-```
-
-## Frontend
-
-React-часть находится в папке `frontend`.
-
-Установка и сборка:
-
-```powershell
-cd "D:\yura\Сайты и код\проекты\Бот уведомление - Сводка с утра\frontend"
-npm install
-npm run build
-```
-
-После сборки `app.py` создает `output\YYYY-MM-DD.html`, который читает `window.BRIEF_DATA` и показывает:
-
-- hero;
-- погоду;
-- праздники;
-- котов картинками;
-- задачи.
-<img width="1895" height="937" alt="image" src="https://github.com/user-attachments/assets/6adc8291-9805-4298-83bb-e76c95b4d728" />
-
-React Bits сейчас не используется.
-
-После любых изменений в `frontend` сначала обновите сборку, а потом запускайте Python:
-
-```powershell
-cd "D:\yura\Сайты и код\проекты\Бот уведомление - Сводка с утра"
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 cd frontend
+npm ci
 npm run build
 cd ..
-.\.venv\Scripts\python.exe app.py
-Start-Process ".\output\2026-06-21.html"
+.\.venv\Scripts\python.exe app.py --local-only
+Start-Process (Get-ChildItem .\output\*.html | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 ```
 
-Открыть самый свежий HTML-файл можно одной командой:
+Если `py` отсутствует, используйте `python -m venv .venv`. Активация окружения
+не обязательна: команды используют его Python напрямую.
 
-```powershell
-Start-Process (Get-ChildItem ".\output\*.html" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-```
+`--local-only` отключает обе отправки независимо от config, но получает свежие
+данные из публичных API. Это удобный первый запуск без Telegram-ключей.
+Без frontend/dist создаётся простая HTML-версия с предупреждением.
+После изменения интерфейса повторите сборку и запуск Python.
 
 ## Настройки
 
-Все обычные настройки находятся в `config.json`.
+`config.json` читается относительно проекта, независимо от текущего каталога.
 
-По умолчанию сводка настроена на Светлогорск, Беларусь:
+| Поле | Значение и ограничения |
+|---|---|
+| `city_name`, `country_name` | Подписи в сводке |
+| `latitude`, `longitude` | Числа от -90 до 90 / от -180 до 180 |
+| `country_code` | Двухбуквенный код страны Nager.Date, например `BY` |
+| `timezone` | Часовой пояс IANA, например `Europe/Minsk`; определяет дату сводки |
+| `output_dir` | Каталог результатов; относительный путь считается от проекта |
+| `cat_images_count` | Целое 0–10; 0 отключает запрос котов |
+| `send_telegram` | JSON `true` / `false`; отправлять HTML-документ |
+| `send_windows_notification` | JSON `true` / `false`; Windows toast |
+| `language` | Зарезервировано; текущий интерфейс и описания погоды — на русском |
 
-- `city_name`: `Светлогорск`;
-- `country_code`: `BY`;
-- `timezone`: `Europe/Minsk`;
-- `latitude`: `52.6329`;
-- `longitude`: `29.7389`.
+В исходном config оба уведомления включены. `--local-only` имеет приоритет.
+Ошибка JSON, координат, timezone или прав записи завершает команду кодом 1.
 
-Важные переключатели:
+В `tasks.md` добавляйте `- [ ] Задача`; строки `- [x] Выполнено` пропускаются.
+Поддерживаются маркеры `-` и `*`, UTF-8 с BOM или без него. Пустой файл означает
+отсутствие задач; отсутствующий/нечитаемый файл отображается как ошибка.
 
-- `send_telegram` - отправлять сводку в Telegram;
-- `send_windows_notification` - показывать локальное Windows-уведомление.
+## Telegram и окружение
 
-Если `send_telegram=true`, но `TELEGRAM_BOT_TOKEN` или `TELEGRAM_CHAT_ID` не заданы, скрипт выведет предупреждение и продолжит работу локально.
+1. Создайте бота через `@BotFather` (`/newbot`).
+2. Создайте `.env` по `.env.example`, укажите токен и напишите своему боту сообщение.
+3. Запустите `.\.venv\Scripts\python.exe get_chat_id.py`, скопируйте нужный chat_id в `.env`.
+4. Включите `send_telegram=true`; запустите `.\.venv\Scripts\python.exe app.py`.
 
-## Telegram
-<img width="1899" height="937" alt="image" src="https://github.com/user-attachments/assets/6487c089-609c-4086-9d21-ef889909fb08" />
+| Переменная | Назначение |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Секретный токен BotFather |
+| `TELEGRAM_CHAT_ID` | Получатель HTML: личный чат, группа или канал с нужными правами |
 
-### Создать бота
+Обе команды читают `.env` из корня проекта. Уже заданное окружение имеет приоритет
+над файлом, включая PowerShell-запуск. Поддерживаются кавычки и префикс `export`.
+`.env*` исключены из Git, кроме `.env.example`. Замените значения `PASTE_...`.
 
-1. Откройте Telegram и найдите `@BotFather`.
-2. Отправьте команду `/newbot`.
-3. Задайте имя и username бота.
-4. BotFather выдаст токен. Не вставляйте его в код, `config.json`, README или публичные сообщения.
+Без токена/chat_id отправка пропускается, файлы создаются. Ошибка Telegram не
+удаляет локальную сводку. Код 0 означает создание файлов, а не гарантию доставки.
+Telegram-клиент может требовать скачать HTML и открыть внешним браузером.
+Сводка содержит ваши задачи — выбирайте получателя внимательно.
 
-### Написать боту первое сообщение
-
-Откройте созданного бота в Telegram и отправьте ему любое сообщение, например `привет`.
-
-Без первого сообщения Telegram Bot API обычно не вернет ваш `chat_id`.
-
-### Узнать TELEGRAM_CHAT_ID
-
-В PowerShell временно задайте токен только для текущего окна:
-
-```powershell
-$env:TELEGRAM_BOT_TOKEN="PASTE_BOT_TOKEN_HERE"
-python get_chat_id.py
-```
-
-Скрипт покажет найденные `chat_id`. Скопируйте нужный ID.
-
-### Проверить отправку на Windows
-
-В том же окне PowerShell задайте `chat_id` и запустите проект:
+## Повторный и скрытый Windows-запуск
 
 ```powershell
-$env:TELEGRAM_BOT_TOKEN="PASTE_BOT_TOKEN_HERE"
-$env:TELEGRAM_CHAT_ID="PASTE_CHAT_ID_HERE"
-python app.py
+.\run_morning_brief.ps1 -LocalOnly  # без уведомлений
+.\run_morning_brief.ps1             # по config.json
 ```
 
-Можно также создать локальный `.env` в корне проекта по примеру `.env.example`:
+Лог: `logs/morning-brief.log`. Скрипт использует `.venv\Scripts\python.exe` и
+передаёт код завершения. `run_morning_brief_hidden.vbs` запускает его без окна
+из собственной папки. Если необязательный компонент VBScript отключён,
+используйте PowerShell. Для toast нужна интерактивная сессия Windows с разрешёнными уведомлениями.
 
-```env
-TELEGRAM_BOT_TOKEN=PASTE_BOT_TOKEN_HERE
-TELEGRAM_CHAT_ID=PASTE_CHAT_ID_HERE
-```
+## Linux и cron
 
-Файл `.env` добавлен в `.gitignore`; не отправляйте его в репозиторий.
-
-Ожидаемый результат:
-
-- в папке `output` появился файл `YYYY-MM-DD.md`;
-- в папке `output` появился файл `YYYY-MM-DD.html`;
-- в папке `output\cats` появились скачанные картинки котов;
-- на компьютере появилось Windows-уведомление;
-- в Telegram пришел HTML-файл документом с короткой подписью.
-
-HTML самодостаточный, поэтому его можно открыть и из локальной папки `output`, и после скачивания из Telegram.
-
-## Повторный локальный запуск
-
-```powershell
-cd "D:\yura\Сайты и код\проекты\Бот уведомление - Сводка с утра"
-.\.venv\Scripts\Activate.ps1
-python app.py
-```
-
-Если Telegram-переменные не заданы, будет создана локальная сводка и показано Windows-уведомление.
-
-Полную HTML-версию можно открыть вручную:
-
-```powershell
-start .\output\YYYY-MM-DD.html
-```
-
-Или открыть самый свежий HTML:
-
-```powershell
-Start-Process (Get-ChildItem ".\output\*.html" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-```
-
-## Перенос на сервер
-<img width="1896" height="938" alt="image" src="https://github.com/user-attachments/assets/0712b333-1a01-4d83-b97f-77654ab3184c" />
-
-На Linux-сервере Windows-уведомления не нужны, поэтому в `config.json` обычно ставят:
-
-```json
-"send_windows_notification": false
-```
-
-Базовый порядок:
+После клонирования из корня проекта:
 
 ```bash
-cd /opt
-git clone <repo-url> morning-summary
-cd /opt/morning-summary
 python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -r requirements.txt
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+cd frontend
+npm ci
+npm run build
+cd ..
+.venv/bin/python app.py --local-only
 ```
 
-Если проекта нет в Git, перенесите папку проекта на сервер любым удобным способом и выполните команды из нее.
-
-Секреты удобно хранить в отдельном env-файле на сервере, например `/etc/morning-summary.env`:
-
-```bash
-export TELEGRAM_BOT_TOKEN='PASTE_BOT_TOKEN_HERE'
-export TELEGRAM_CHAT_ID='PASTE_CHAT_ID_HERE'
-```
-
-Ограничьте доступ к файлу:
-
-```bash
-sudo chmod 600 /etc/morning-summary.env
-```
-
-Проверка на сервере:
-
-```bash
-. /etc/morning-summary.env
-cd /opt/morning-summary
-. .venv/bin/activate
-python app.py
-```
-
-## Cron на Linux
-
-Откройте cron:
-
-```bash
-crontab -e
-```
-
-Пример запуска каждый день в 7:00:
+Windows toast на Linux пропускается. Для Telegram настройте `.env`, ограничьте
+доступ `chmod 600 .env` и уберите `--local-only`.
+Пример cron (замените путь своим):
 
 ```cron
-0 7 * * * . /etc/morning-summary.env; cd /opt/morning-summary && /opt/morning-summary/.venv/bin/python app.py >> /opt/morning-summary/cron.log 2>&1
+0 7 * * * cd /opt/morning-brief && .venv/bin/python app.py >> cron.log 2>&1
 ```
 
-Проверьте, что путь `/opt/morning-summary` совпадает с реальным путем к проекту.
+Время запуска задаёт timezone cron/сервера; настройка timezone проекта управляет
+датой данных. Каждый запуск может отправить сообщение. Дедупликации и блокировки
+одновременных запусков нет.
 
-## Задачи
+## Разработка и проверки
 
-Незавершенные задачи хранятся в `tasks.md`.
-
-Скрипт добавляет в сводку только задачи с пустым чекбоксом:
-
-```markdown
-- [ ] Пример незавершенной задачи
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m unittest discover -v
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m pip_audit
+cd frontend
+npm ci
+npm run lint
+npm test
+npm run build
+npm audit
+npx playwright install chromium
+cd ..
+.\.venv\Scripts\python.exe tests/generate_fixtures.py
+cd frontend
+npm run test:e2e
 ```
 
-Выполненные задачи вида `- [x] ...` в сводку не попадают.
+На Linux используйте `.venv/bin/python` и `npx playwright install --with-deps chromium`.
+Тесты не отправляют уведомления. Браузерные fixtures детерминированы и проверяют
+длинные задачи, экранирование HTML, отсутствие сети, ошибки данных и 3 ширины экрана.
+GitHub Actions запускает проверки на Linux/Python 3.11/Node 22 и Windows/Python 3.13/Node 24.
+
+`npm run dev` показывает пример из `frontend/index.html`, а не Python-сводку.
+Vite собирает библиотеку JS/CSS; production-результат проверяйте открытием HTML
+из `output`. Vite preview для такой сборки не поддерживается.
+
+## Сервисы и ограничения
+
+- Open-Meteo: текущая погода. Nager.Date: официальные праздники, покрытие зависит от страны.
+- The Cat API: случайные изображения; при частичном ответе показываются доступные.
+- Картинки принимаются только с HTTPS CDN The Cat API или его конкретного S3-bucket,
+  без перенаправлений, до 8 МБ каждая; SVG исключён. При ошибках нет внешних fallback-запросов.
+- Шрифты Barlow/Cormorant Garamond встроены через Fontsource (SIL OFL).
+- Файлы за одну дату перезаписываются. Картинки в `output/cats` накапливаются;
+  политики автоматического удаления нет.
+- Полного lock-файла Python нет: используйте чистое окружение и `pip_audit`.
+
+Подробности и оставшиеся ограничения: [аудит](docs/AUDIT.md).

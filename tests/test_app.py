@@ -101,6 +101,8 @@ class BriefTests(unittest.TestCase):
     def test_untrusted_cat_urls_are_rejected_before_network(self):
         urls = ["http://cdn2.thecatapi.com/x", "https://localhost/x", "https://127.0.0.1/x",
                 "file:///etc/passwd", "https://cdn2.thecatapi.com.evil.test/x",
+                "https://s3.us-west-2.amazonaws.com/another-bucket/x.png",
+                "https://s3.us-west-2.amazonaws.com/cdn2.thecatapi.com/images/../../../x",
                 "https://user@cdn2.thecatapi.com/x", "https://cdn2.thecatapi.com:444/x", None]
         with patch.object(app.requests, "get") as request:
             for url in urls:
@@ -108,6 +110,12 @@ class BriefTests(unittest.TestCase):
                     self.assertFalse(app.is_allowed_cat_url(url))
                     self.assertIsNone(app.download_cat_image(url, self.base, "2026-10-05", 1))
             request.assert_not_called()
+
+    def test_catapi_s3_bucket_and_partial_results_are_supported(self):
+        url = "https://s3.us-west-2.amazonaws.com/cdn2.thecatapi.com/images/cat.jpg"
+        self.assertTrue(app.is_allowed_cat_url(url))
+        with patch.object(app, "get_json", return_value=[{"url": url}]):
+            self.assertEqual(app.fetch_cat_image_urls({"cat_images_count": 2}), [url])
 
     def test_download_streams_and_embeds_local_image(self):
         response = self.response()

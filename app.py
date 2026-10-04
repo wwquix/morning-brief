@@ -292,7 +292,7 @@ def fetch_cat_image_urls(config: dict[str, Any]) -> list[str] | str:
         for item in data
         if isinstance(item, dict) and is_allowed_cat_url(item.get("url"))
     ]
-    if len(urls) < count:
+    if not urls:
         return CATS_ERROR
 
     return urls[:count]
@@ -321,7 +321,13 @@ def is_allowed_cat_url(url: Any) -> bool:
         return False
     try:
         parsed = urlparse(url)
-        return (parsed.scheme == "https" and parsed.hostname in CAT_IMAGE_HOSTS
+        # The public API also returns its own bucket through the regional S3 endpoint.
+        allowed_host = parsed.hostname in CAT_IMAGE_HOSTS or (
+            parsed.hostname == "s3.us-west-2.amazonaws.com"
+            and parsed.path.startswith("/cdn2.thecatapi.com/images/")
+            and ".." not in parsed.path.split("/") and "%" not in parsed.path
+        )
+        return (parsed.scheme == "https" and allowed_host
                 and parsed.port in (None, 443) and not parsed.username and not parsed.password)
     except ValueError:
         return False
@@ -569,6 +575,7 @@ def build_brief_data(
         },
         "holidays": {
             "summary": summary.holidays.summary,
+            "error": summary.holidays.summary == DATA_ERROR,
             "items": []
             if summary.holidays.summary == "праздников нет"
             else markdown_list_to_plain_items(summary.holidays.markdown),
@@ -582,6 +589,7 @@ def build_brief_data(
         ],
         "assets": {
             "heroImage": hero_data_url or "",
+            "embedded": True,
         },
     }
 
@@ -658,10 +666,13 @@ def render_summary_html(summary: SummaryData, config: dict[str, Any], base_dir: 
             build_version = max(assets["script_mtime_ns"], assets["style_mtime_ns"])
             style_text = inline_style_text(assets["style_path"].read_text(encoding="utf-8"))
             script_text = inline_script_text(assets["script_path"].read_text(encoding="utf-8"))
+            notices_path = base_dir / "THIRD_PARTY_NOTICES.txt"
+            notices = html.escape(notices_path.read_text(encoding="utf-8")) if notices_path.exists() else ""
 
             return f"""<!doctype html>
 <html lang="ru">
 <head>
+    <!-- {notices} -->
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Утренняя сводка — {date_text}</title>
@@ -708,6 +719,7 @@ def render_summary_html(summary: SummaryData, config: dict[str, Any], base_dir: 
 
         body {{
             margin: 0;
+            overflow-wrap: anywhere;
             background: var(--bg);
             color: var(--text);
             font-family: "Segoe UI", Arial, sans-serif;
@@ -1119,7 +1131,7 @@ def run_summary(base_dir: Path, local_only: bool = False) -> None:
     print(f"Создан файл: {html_output_path}")
     print(f"Открывайте локальную версию: {html_output_path.resolve()}")
     print("HTML самодостаточный: CSS, JS и локальные изображения встроены в файл.")
-    print("Telegram отправляет HTML-файл документом, если заданы переменные TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.")
+    print("Telegram отправляет HTML, если включён send_telegram и заданы TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.")
     print("Обновление страницы в браузере не пересоздаёт данные и не отправляет уведомления повторно.")
     warning = frontend_build_warning(base_dir)
     if warning:
