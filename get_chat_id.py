@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import requests
 
+from app import load_env_file
 
 REQUEST_TIMEOUT_SECONDS = 10
 
@@ -42,6 +44,7 @@ def format_chat_name(chat: dict[str, Any]) -> str:
 
 
 def main() -> None:
+    load_env_file(Path(__file__).resolve().parent / ".env")
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not bot_token:
         print("Не задана переменная окружения TELEGRAM_BOT_TOKEN.")

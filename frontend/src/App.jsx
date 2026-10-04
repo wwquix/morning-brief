@@ -1,7 +1,5 @@
 import "./App.css";
 
-const HERO_MARKUP_IMAGE_PATH = "../frontend/public/hero-bg.jpg";
-const HERO_CSS_IMAGE_PATH = "../public/hero-bg.jpg";
 const PUBLIC_HERO_IMAGE_PATH = "/hero-bg.jpg";
 
 const emptyData = {
@@ -47,48 +45,9 @@ function valueFor(items, label) {
   return item?.value || "не удалось получить данные";
 }
 
-function cleanImageUrl(src) {
-  return String(src || HERO_CSS_IMAGE_PATH)
-    .replace(/\\/g, "/")
-    .replace(/"/g, "%22");
-}
-
 function imageStack(src) {
-  return `url("${cleanImageUrl(toCssImagePath(src))}")`;
-}
-
-function isFileOutput() {
-  return typeof window !== "undefined" && window.location.protocol === "file:";
-}
-
-function getHeroCssImagePath() {
-  if (isFileOutput()) {
-    return HERO_CSS_IMAGE_PATH;
-  }
-
-  return PUBLIC_HERO_IMAGE_PATH;
-}
-
-function getHeroMarkupImagePath() {
-  if (typeof window !== "undefined" && window.location.protocol === "file:") {
-    return HERO_MARKUP_IMAGE_PATH;
-  }
-
-  return PUBLIC_HERO_IMAGE_PATH;
-}
-
-function toCssImagePath(src) {
-  const value = src || getHeroCssImagePath();
-
-  if (isFileOutput() && String(value).startsWith("cats/")) {
-    return `../../output/${value}`;
-  }
-
-  if (isFileOutput() && value === HERO_MARKUP_IMAGE_PATH) {
-    return HERO_CSS_IMAGE_PATH;
-  }
-
-  return value;
+  if (!src) return undefined;
+  return `url("${String(src).replace(/"/g, "%22")}")`;
 }
 
 function taskCountText(count) {
@@ -179,7 +138,10 @@ function DetailRows({ rows }) {
   );
 }
 
-function TaskList({ tasks }) {
+function TaskList({ tasks, error }) {
+  if (error) {
+    return <p className="detail-note" role="status">{error}</p>;
+  }
   if (!tasks.length) {
     return (
       <div className="task-detail-copy">
@@ -192,8 +154,8 @@ function TaskList({ tasks }) {
   return (
     <div className="task-detail-copy">
       <ul className="task-lines">
-        {tasks.map((task) => (
-          <li key={task}>{task}</li>
+        {tasks.map((task, index) => (
+          <li key={`${index}-${task}`}>{task}</li>
         ))}
       </ul>
       <p className="source-note">Источник задач: tasks.md</p>
@@ -210,22 +172,24 @@ export function App({ data = emptyData }) {
   const weatherItems = Array.isArray(weather.items) ? weather.items : [];
   const assets = { ...emptyData.assets, ...(brief.assets || {}) };
   const taskCount = tasks.length;
-  const taskSummary = taskCountText(taskCount);
+  const taskSummary = brief.tasksError ? "задачи недоступны" : taskCountText(taskCount);
   const taskPreview = tasks.slice(0, 3);
   const catImages = cats.map((cat) => cat.src || cat.url).filter(Boolean);
-  const heroCssImagePath = getHeroCssImagePath();
-  const heroMarkupImagePath = assets.heroImage || getHeroMarkupImagePath();
+  const heroMarkupImagePath = assets.heroImage || (assets.embedded ? "" : PUBLIC_HERO_IMAGE_PATH);
   const featureImage = catImages[0] || heroMarkupImagePath;
-  const moodImage = catImages[1] || catImages[0] || heroCssImagePath;
+  const moodImage = catImages[1] || catImages[0] || heroMarkupImagePath;
   const description = weather.description || "неизвестно";
   const feelsLike = valueFor(weatherItems, "Ощущается как");
   const wind = valueFor(weatherItems, "Ветер");
   const precipitation = valueFor(weatherItems, "Осадки");
   const rain = valueFor(weatherItems, "Дождь");
-  const hasHolidays = Boolean(holidays.items?.length);
-  const holidayText = hasHolidays ? holidays.items.join(", ") : "нет";
+  const holidaysUnavailable = holidays.error || holidays.summary === "не удалось получить данные";
+  const hasHolidays = !holidaysUnavailable && Boolean(holidays.items?.length);
+  const holidayText = holidaysUnavailable ? "данные недоступны" : hasHolidays ? holidays.items.join(", ") : "нет";
   const informalReason = informalReasonForDate(brief.date);
-  const holidaySentence = hasHolidays
+  const holidaySentence = holidaysUnavailable
+    ? "Данные о праздниках временно недоступны."
+    : hasHolidays
     ? `Официальные праздники: ${holidays.items.join(", ")}.`
     : `Официальных праздников сегодня нет, поэтому можно выбрать свой маленький повод.`;
   const weekday = weekdayForDate(brief.date);
@@ -246,7 +210,7 @@ export function App({ data = emptyData }) {
   return (
     <main className="terrain-page">
       <section className="terrain-hero" id="today">
-        <img className="terrain-hero-image" src={heroMarkupImagePath} alt="" aria-hidden="true" />
+        {heroMarkupImagePath && <img className="terrain-hero-image" src={heroMarkupImagePath} alt="" aria-hidden="true" />}
 
         <nav className="terrain-nav animate-nav" aria-label="Навигация сводки">
           <a className="nav-capsule" href="#today">
@@ -275,7 +239,7 @@ export function App({ data = emptyData }) {
       <section className="today-editorial" aria-labelledby="today-heading">
         <div className="editorial-grid">
           <figure className="feature-card animate-fade-up">
-            <img src={featureImage} alt="Кот дня" />
+            {featureImage && <img src={featureImage} alt={catImages.length ? "Кот дня" : "Утренний пейзаж"} />}
             <figcaption className="feature-info">
               <MetricRow label="Температура" value={weather.temperature} />
               <MetricRow label="Ветер" value={wind} />
@@ -321,14 +285,13 @@ export function App({ data = emptyData }) {
 
           <a
             className="daily-module-card cats-module-card"
-            id="cats"
-            href="#cats"
+            href="#cats-details"
             style={{ "--card-image": imageStack(moodImage) }}
           >
             <div className="module-card-content">
               <p>Кот дня</p>
               <h3>КОТЫ</h3>
-              <span>+10 к настроению</span>
+              <span>{catImages.length ? "+10 к настроению" : brief.catsError || "Изображений нет"}</span>
             </div>
           </a>
 
@@ -342,8 +305,8 @@ export function App({ data = emptyData }) {
               <span>{taskSummary}</span>
               {taskPreview.length > 0 && (
                 <ul className="module-task-preview">
-                  {taskPreview.map((task) => (
-                    <li key={task}>{task}</li>
+                  {taskPreview.map((task, index) => (
+                    <li key={`${index}-${task}`}>{task}</li>
                   ))}
                 </ul>
               )}
@@ -372,7 +335,9 @@ export function App({ data = emptyData }) {
               <span>02</span>
               <h3>Праздники</h3>
             </header>
-            {hasHolidays ? (
+            {holidaysUnavailable ? (
+              <p className="detail-note">Данные о праздниках временно недоступны.</p>
+            ) : hasHolidays ? (
               <ul className="holiday-lines">
                 {holidays.items.map((holiday) => (
                   <li key={holiday}>{holiday}</li>
@@ -394,7 +359,21 @@ export function App({ data = emptyData }) {
               <span>03</span>
               <h3>Задачи</h3>
             </header>
-            <TaskList tasks={tasks} />
+            <TaskList tasks={tasks} error={brief.tasksError} />
+          </article>
+
+          <article className="detail-panel" id="cats-details">
+            <header>
+              <span>04</span>
+              <h3>Коты</h3>
+            </header>
+            {cats.length ? (
+              <div className="cat-gallery">
+                {cats.map((cat, index) => (
+                  <img key={`${index}-${cat.src}`} src={cat.src} alt={cat.alt || `Кот ${index + 1}`} loading="lazy" />
+                ))}
+              </div>
+            ) : <p className="detail-note">{brief.catsError || "Изображений нет."}</p>}
           </article>
         </div>
       </section>

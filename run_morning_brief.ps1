@@ -1,4 +1,6 @@
-﻿$ErrorActionPreference = "Stop"
+param([switch]$LocalOnly)
+
+$ErrorActionPreference = "Stop"
 
 Set-Location -LiteralPath $PSScriptRoot
 
@@ -18,30 +20,7 @@ function Write-Log {
 
 Write-Log "Morning brief start"
 
-$envPath = Join-Path $PSScriptRoot ".env"
-
-if (Test-Path $envPath) {
-    Get-Content $envPath -Encoding UTF8 | ForEach-Object {
-        $line = $_.Trim()
-
-        if ($line -eq "" -or $line.StartsWith("#")) {
-            return
-        }
-
-        if ($line -match "^\s*([^=]+)\s*=\s*(.*)\s*$") {
-            $name = $matches[1].Trim()
-            $value = $matches[2].Trim().Trim('"').Trim("'")
-            Set-Item -Path "Env:$name" -Value $value
-        }
-    }
-
-    Write-Log ".env loaded"
-} else {
-    Write-Log ".env not found"
-}
-
-Write-Log "Telegram token present: $([bool]$env:TELEGRAM_BOT_TOKEN)"
-Write-Log "Telegram chat id present: $([bool]$env:TELEGRAM_CHAT_ID)"
+# app.py loads .env; existing process variables take precedence.
 
 $pythonPath = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 $appPath = Join-Path $PSScriptRoot "app.py"
@@ -56,7 +35,10 @@ if (!(Test-Path $appPath)) {
     exit 1
 }
 
-& $pythonPath $appPath 2>&1 | ForEach-Object {
+$appArguments = @($appPath)
+if ($LocalOnly) { $appArguments += "--local-only" }
+
+& $pythonPath @appArguments 2>&1 | ForEach-Object {
     Add-Content -Path $logPath -Value $_ -Encoding UTF8
 }
 
