@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import base64
 import html
 import json
+import math
 import mimetypes
 import os
 import subprocess
@@ -15,10 +17,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
-
 
 REQUEST_TIMEOUT_SECONDS = 10
 TELEGRAM_UPLOAD_TIMEOUT_SECONDS = 30
@@ -26,6 +27,9 @@ NOTIFICATION_STARTUP_TIMEOUT_SECONDS = 5
 NOTIFICATION_WORKER_TIMEOUT_SECONDS = 120
 DATA_ERROR = "не удалось получить данные"
 CATS_ERROR = "не удалось получить котов"
+TASKS_ERROR = "Не удалось прочитать tasks.md. Проверьте файл и кодировку UTF-8."
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
+CAT_IMAGE_HOSTS = {"cdn2.thecatapi.com", "cdn.thecatapi.com"}
 WEEKDAYS_RU = [
     "понедельник",
     "вторник",
@@ -73,16 +77,41 @@ class SummaryData:
     holidays: HolidayReport
     cats: list[CatImage] | str
     pending_tasks: list[str]
+    tasks_error: str = ""
 
 
 def load_config(config_path: Path) -> dict[str, Any]:
-    with config_path.open("r", encoding="utf-8") as file:
-        return json.load(file)
+    with config_path.open("r", encoding="utf-8-sig") as file:
+        config = json.load(file)
+    if not isinstance(config, dict):
+        raise ValueError("config.json должен содержать JSON-объект")
+    for key, bound in (("latitude", 90), ("longitude", 180)):
+        value = config.get(key)
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or not -bound <= value <= bound):
+            raise ValueError(f"{key}: требуется число от {-bound} до {bound}")
+    count = config.get("cat_images_count", 2)
+    if type(count) is not int or not 0 <= count <= 10:
+        raise ValueError("cat_images_count: требуется целое число от 0 до 10")
+    for key in ("city_name", "output_dir", "timezone", "country_code"):
+        if not isinstance(config.get(key), str) or not config[key].strip():
+            raise ValueError(f"{key}: требуется непустая строка")
+    country = config["country_code"]
+    if len(country) != 2 or not country.isascii() or not country.isalpha():
+        raise ValueError("country_code: требуется двухбуквенный код страны")
+    try:
+        ZoneInfo(config["timezone"])
+    except (ZoneInfoNotFoundError, ValueError) as error:
+        raise ValueError("timezone: неизвестный часовой пояс IANA") from error
+    for key in ("send_telegram", "send_windows_notification"):
+        if key in config and not isinstance(config[key], bool):
+            raise ValueError(f"{key}: требуется JSON true или false")
+    return config
 
 
 def load_env_file(env_path: Path) -> None:
     try:
-        lines = env_path.read_text(encoding="utf-8").splitlines()
+        lines = env_path.read_text(encoding="utf-8-sig").splitlines()
     except OSError:
         return
 
@@ -96,7 +125,7 @@ def load_env_file(env_path: Path) -> None:
 
         key, value = stripped.split("=", 1)
         key = key.strip()
-        if not key or key in os.environ:
+        if not key or not key.isascii() or not key.replace("_", "a").isalnum() or key[0].isdigit() or key in os.environ:
             continue
 
         value = value.strip()
@@ -249,6 +278,8 @@ def fetch_holidays(config: dict[str, Any], today) -> HolidayReport:
 
 def fetch_cat_image_urls(config: dict[str, Any]) -> list[str] | str:
     count = int(config.get("cat_images_count", 2))
+    if count == 0:
+        return []
     data = get_json(
         "https://api.thecatapi.com/v1/images/search",
         params={"limit": count, "order": "RANDOM"},
@@ -259,7 +290,7 @@ def fetch_cat_image_urls(config: dict[str, Any]) -> list[str] | str:
     urls = [
         item.get("url")
         for item in data
-        if isinstance(item, dict) and isinstance(item.get("url"), str)
+        if isinstance(item, dict) and is_allowed_cat_url(item.get("url"))
     ]
     if len(urls) < count:
         return CATS_ERROR
@@ -285,28 +316,54 @@ def image_extension_from_response(response: requests.Response, url: str) -> str:
     return ".jpg"
 
 
-def download_cat_image(url: str, cats_dir: Path, date_text: str, index: int) -> CatImage:
+def is_allowed_cat_url(url: Any) -> bool:
+    if not isinstance(url, str):
+        return False
     try:
-        response = requests.get(
+        parsed = urlparse(url)
+        return (parsed.scheme == "https" and parsed.hostname in CAT_IMAGE_HOSTS
+                and parsed.port in (None, 443) and not parsed.username and not parsed.password)
+    except ValueError:
+        return False
+
+
+def download_cat_image(url: str, cats_dir: Path, date_text: str, index: int) -> CatImage | None:
+    if not is_allowed_cat_url(url):
+        return None
+    try:
+        with requests.get(
             url,
             timeout=REQUEST_TIMEOUT_SECONDS,
             headers={"Cache-Control": "no-cache"},
-        )
-        response.raise_for_status()
-
-        content_type = response.headers.get("Content-Type", "").lower()
-        if not content_type.startswith("image/"):
-            raise ValueError("ответ не является изображением")
+            stream=True,
+            allow_redirects=False,
+        ) as response:
+            response.raise_for_status()
+            content_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
+            if response.status_code != 200 or content_type not in {
+                "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"
+            }:
+                return None
+            if int(response.headers.get("Content-Length", "0")) > MAX_IMAGE_BYTES:
+                return None
+            content = bytearray()
+            deadline = time.monotonic() + REQUEST_TIMEOUT_SECONDS
+            for chunk in response.iter_content(chunk_size=64 * 1024):
+                if len(content) + len(chunk) > MAX_IMAGE_BYTES or time.monotonic() > deadline:
+                    return None
+                content.extend(chunk)
+            if not content:
+                return None
+            extension = image_extension_from_response(response, url)
 
         cats_dir.mkdir(parents=True, exist_ok=True)
-        extension = image_extension_from_response(response, url)
         filename = f"{date_text}-{index}-{int(time.time() * 1000)}{extension}"
         local_path = cats_dir / filename
-        local_path.write_bytes(response.content)
+        local_path.write_bytes(content)
 
         return CatImage(url=url, src=f"cats/{filename}", local_path=local_path)
-    except Exception:
-        return CatImage(url=url, src=url, local_path=None)
+    except (requests.RequestException, OSError, ValueError):
+        return None
 
 
 def fetch_cat_images(config: dict[str, Any], output_dir: Path, date_text: str) -> list[CatImage] | str:
@@ -315,22 +372,21 @@ def fetch_cat_images(config: dict[str, Any], output_dir: Path, date_text: str) -
         return urls
 
     cats_dir = output_dir / "cats"
-    return [
+    cats = [
         download_cat_image(url, cats_dir, date_text, index)
         for index, url in enumerate(urls, start=1)
     ]
+    downloaded = [cat for cat in cats if cat is not None]
+    return downloaded if downloaded or not urls else CATS_ERROR
 
 
 def read_pending_tasks(tasks_path: Path) -> list[str]:
-    try:
-        lines = tasks_path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return []
+    lines = tasks_path.read_text(encoding="utf-8-sig").splitlines()
 
     tasks = []
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith("- [ ]") or stripped.startswith("* [ ]"):
+        if stripped.startswith(("- [ ]", "* [ ]")):
             task_text = stripped[5:].strip()
             if task_text:
                 tasks.append(f"- {task_text}")
@@ -396,7 +452,10 @@ def render_cats_html(cats: list[CatImage] | str) -> str:
 
     figures = []
     for index, cat in enumerate(cats, start=1):
-        src = html.escape(cat.src, quote=True)
+        embedded = file_to_data_url(cat.local_path) if cat.local_path else None
+        if not embedded:
+            continue
+        src = html.escape(embedded, quote=True)
         source_text = "локальное изображение" if cat.local_path else "прямая ссылка"
         figures.append(
             f"""<figure class="cat-card">
@@ -486,9 +545,9 @@ def build_brief_data(
     cats = []
     if isinstance(summary.cats, list):
         for index, cat in enumerate(summary.cats, start=1):
-            cat_src = cat.src
-            if cat.local_path is not None and cat.local_path.exists():
-                cat_src = file_to_data_url(cat.local_path) or cat.src
+            cat_src = file_to_data_url(cat.local_path) if cat.local_path else None
+            if not cat_src:
+                continue
 
             cats.append(
                 {
@@ -515,6 +574,8 @@ def build_brief_data(
             else markdown_list_to_plain_items(summary.holidays.markdown),
         },
         "cats": cats,
+        "catsError": summary.cats if isinstance(summary.cats, str) else "",
+        "tasksError": summary.tasks_error,
         "tasks": [
             strip_markdown_list_marker(task)
             for task in summary.pending_tasks
@@ -575,7 +636,9 @@ def frontend_build_warning(base_dir: Path) -> str | None:
 
 
 def json_for_script(data: dict[str, Any]) -> str:
-    return json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    return (json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
+            .replace(">", "\\u003e").replace("&", "\\u0026")
+            .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
 
 
 def inline_style_text(style_text: str) -> str:
@@ -751,7 +814,7 @@ def render_summary_html(summary: SummaryData, config: dict[str, Any], base_dir: 
 
     <section>
         <h2>Задачи</h2>
-        {render_tasks_html(summary.pending_tasks)}
+        {f'<p>{html.escape(summary.tasks_error)}</p>' if summary.tasks_error else render_tasks_html(summary.pending_tasks)}
     </section>
 </main>
 </body>
@@ -889,18 +952,14 @@ def telegram_api_post(
         print(f"Предупреждение: Telegram {method}: не удалось выполнить запрос")
         return False
 
-    if response.ok:
-        return True
-
-    description = ""
     try:
         payload = response.json()
-        if isinstance(payload, dict) and isinstance(payload.get("description"), str):
-            description = f": {payload['description']}"
     except ValueError:
-        pass
-
-    print(f"Предупреждение: Telegram {method}: HTTP {response.status_code}{description}")
+        payload = None
+    if response.ok and isinstance(payload, dict) and payload.get("ok") is True:
+        return True
+    # Do not log response bodies: they can contain credentials or private data.
+    print(f"Предупреждение: Telegram {method}: ошибка API, HTTP {response.status_code}")
     return False
 
 
@@ -1001,7 +1060,13 @@ def build_summary(base_dir: Path, output_dir: Path, config: dict[str, Any]) -> S
     holidays = fetch_holidays(config, today)
     weather = fetch_weather(config)
     cats = fetch_cat_images(config, output_dir, date_text)
-    tasks = read_pending_tasks(base_dir / "tasks.md")
+    tasks_error = ""
+    try:
+        tasks = read_pending_tasks(base_dir / "tasks.md")
+    except (OSError, UnicodeError):
+        tasks = []
+        tasks_error = TASKS_ERROR
+        print(f"Предупреждение: {tasks_error}")
 
     markdown = f"""# Утренняя сводка — {date_text}
 
@@ -1019,7 +1084,7 @@ def build_summary(base_dir: Path, output_dir: Path, config: dict[str, Any]) -> S
 
 ## Задачи
 
-{render_tasks_section(tasks)}
+{tasks_error or render_tasks_section(tasks)}
 """
 
     summary = SummaryData(
@@ -1030,14 +1095,14 @@ def build_summary(base_dir: Path, output_dir: Path, config: dict[str, Any]) -> S
         holidays=holidays,
         cats=cats,
         pending_tasks=tasks,
+        tasks_error=tasks_error,
     )
     summary.html = render_summary_html(summary, config, base_dir)
 
     return summary
 
 
-def main() -> None:
-    base_dir = Path(__file__).resolve().parent
+def run_summary(base_dir: Path, local_only: bool = False) -> None:
     load_env_file(base_dir / ".env")
     config = load_config(base_dir / "config.json")
     output_dir = base_dir / str(config.get("output_dir", "output"))
@@ -1060,10 +1125,27 @@ def main() -> None:
     if warning:
         print(warning)
 
+    if local_only:
+        print("Локальный режим: Telegram и Windows-уведомления отключены.")
+        return
+
     send_telegram_summary(config, summary, output_path.resolve())
 
-    if config_enabled(config.get("send_windows_notification"), default=True):
+    if sys.platform == "win32" and config_enabled(config.get("send_windows_notification"), default=True):
         send_clickable_notification(select_full_summary_file(output_path).resolve())
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Создать утреннюю сводку")
+    parser.add_argument("--local-only", action="store_true", help="Не отправлять Telegram и Windows-уведомления")
+    args = parser.parse_args(argv)
+    try:
+        run_summary(Path(__file__).resolve().parent, local_only=args.local_only)
+    except (OSError, ValueError):
+        # File errors can include .env contents; keep the CLI diagnostic secret-free.
+        print("Ошибка: проверьте config.json (формат, координаты, timezone, число котов), кодировку UTF-8 и права записи.", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
@@ -1071,4 +1153,4 @@ if __name__ == "__main__":
         notification_status_path = Path(sys.argv[3]) if len(sys.argv) == 4 else None
         show_clickable_notification(sys.argv[2], notification_status_path)
     else:
-        main()
+        raise SystemExit(main())

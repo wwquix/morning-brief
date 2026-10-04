@@ -1,7 +1,8 @@
 Set shell = CreateObject("WScript.Shell")
-projectPath = "D:\yura\????? ? ???\???????\??? ??????????? - ?????? ? ????"
+Set fso = CreateObject("Scripting.FileSystemObject")
+projectPath = fso.GetParentFolderName(WScript.ScriptFullName)
 scriptPath = projectPath & "\run_morning_brief.ps1"
 
 cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " & Chr(34) & scriptPath & Chr(34)
 
-shell.Run cmd, 0, True
+WScript.Quit shell.Run(cmd, 0, True)
