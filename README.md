@@ -24,7 +24,7 @@
 git clone https://github.com/wwquix/morning-brief.git
 cd morning-brief
 py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 cd frontend
 npm ci
@@ -104,7 +104,7 @@ Telegram-клиент может требовать скачать HTML и от�
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install --upgrade pip setuptools
 .venv/bin/python -m pip install -r requirements.txt
 cd frontend
 npm ci

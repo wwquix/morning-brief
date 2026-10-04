@@ -96,3 +96,16 @@ pip обновлён только в виртуальном окружении �
   не обнаружены; переход линтера на ESLint 10 потребует замены/обновления React-плагина.
 - GitHub Actions настроен на Linux/Python 3.11/Node 22 и Windows/Python 3.13/Node 24.
   Фактические результаты конкретного коммита доступны во вкладке Checks pull request.
+
+### Проверка GitHub CI
+
+Первый Linux-run `37236139530` прошёл все тесты, линтеры, сборку, 12 браузерных
+сценариев и npm audit, но pip-audit нашёл `PYSEC-2026-3447` в предустановленном
+setuptools 79.0.1 runner (исправление: 83.0.0). Это пакет окружения Python 3.11,
+отсутствовавший в локальном окружении Python 3.13. В CI и инструкции установки
+добавлено обновление setuptools вместе с pip; исключений из аудита не добавлено.
+Actions обновлены до проверенных официальных выпусков и закреплены SHA:
+[checkout 7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1),
+[setup-node 7.0.0](https://github.com/actions/setup-node/releases/tag/v7.0.0),
+[setup-python 7.0.0](https://github.com/actions/setup-python/releases/tag/v7.0.0).
+Это также убирает предупреждение runner об устаревшем Node 20 внутри Actions.
